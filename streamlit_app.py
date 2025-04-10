@@ -18,7 +18,7 @@ def get_frequency(note, octave=4):
     return base_freq * (2 ** (semitone_distance / 12))
 
 # --- Streamlit UI ---
-st.title("🎸Custom Tuning Guitar Chord Generator")
+st.title("Custom Tuning Guitar Chord Generator")
 st.caption("Create Chord Voicings for Any Tuning")
 
 st.subheader("1. Set Your Tuning (6th to 1st string)")
