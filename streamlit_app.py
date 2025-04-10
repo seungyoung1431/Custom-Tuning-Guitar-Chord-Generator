@@ -3,6 +3,9 @@ import streamlit as st
 import numpy as np
 from itertools import product
 from scipy.signal import butter, lfilter
+from io import BytesIO
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 # --- 기본 설정 ---
 note_sequence = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -25,8 +28,16 @@ tuning = []
 open_frequencies = []
 tuning_columns = st.columns(6)
 def_octaves = [2, 2, 3, 3, 3, 4]  # E2 A2 D3 G3 B3 E4
-for i in range(6):
+preset = st.selectbox("🎼 Choose a tuning preset", ["Standard E (EADGBE)", "Drop D (DADGBE)", "Custom"])
+
+if preset == "Standard E (EADGBE)":
     default_notes = ['E', 'A', 'D', 'G', 'B', 'E']
+elif preset == "Drop D (DADGBE)":
+    default_notes = ['D', 'A', 'D', 'G', 'B', 'E']
+else:
+    default_notes = ['E', 'A', 'D', 'G', 'B', 'E']
+
+for i in range(6):
     note = tuning_columns[i].selectbox(f"{6 - i} string", note_sequence, index=note_sequence.index(default_notes[i]))
     tuning.append(note)
     open_frequencies.append(get_frequency(note, def_octaves[i]))
@@ -153,7 +164,7 @@ chord_formulas = {
     "sus4,7,b9,b13": [0, 5, 7, 10, 13, 20],
     "sus4,7,9": [0, 5, 7, 10, 14],
     "sus4,7,9,13": [0, 5, 7, 10, 14, 21],
-    "sus4,7,9,b13": [0, 5, 7, 10, 14, 20]
+    "sus4,7,9,b13": [0, 5, 7, 10, 14, 20],
 }
 guide_tone_intervals = {
     "maj": [0, 4, 7],
@@ -260,6 +271,26 @@ def print_voicing(voicing):
         result.append(f"{string_label}: {'x' if fret == 'x' else f'{fret} → {note}' }")
     return "\n".join(result)
 
+def draw_diagram(voicing, idx):
+    fig, ax = plt.subplots(figsize=(4, 2))
+    ax.set_title(f"Voicing {idx}", fontsize=10)
+    ax.set_xlim(0.5, 6.5)
+    ax.set_ylim(-1, 5)
+    ax.set_xticks(range(1, 7))
+    ax.set_xticklabels([f"{6 - i} ({tuning[i]})" for i in range(6)])
+    ax.set_yticks(range(0, 5))
+    ax.set_yticklabels([f"Fret {i}" for i in range(0, 5)])
+    ax.invert_yaxis()
+    for i, (fret, _) in enumerate(voicing):
+        if fret == "x":
+            ax.text(i + 1, -0.5, 'x', ha='center', va='center', fontsize=12, color='red')
+        elif fret == 0:
+            ax.plot(i + 1, 0, 'o', color='black')
+        elif fret <= 4:
+            ax.plot(i + 1, fret, 'o', color='black')
+    ax.axis('off')
+    return fig
+
 def bandpass_filter(data, rate, low, high):
     nyq = 0.5 * rate
     b, a = butter(4, [low/nyq, high/nyq], btype='band')
@@ -294,6 +325,7 @@ def synthesize_voicing(voicing, sample_rate=44100):
     return audio
 
 # --- 실행 ---
+pdf_images = []
 if st.button("Generate Voicings"):
     voicings = generate_voicings(chord_root, chord_type)
     st.write(f"Number of Voicings: {len(voicings)}")
@@ -305,8 +337,23 @@ if st.button("Generate Voicings"):
         st.subheader("Best Voicing")
         st.text(print_voicing(v))
         st.audio(synthesize_voicing(v), sample_rate=44100)
+        fig = draw_diagram(v, 1)
+        st.pyplot(fig)
+        pdf_images.append(fig)
     else:
         for idx, (v, *_rest) in enumerate(voicings, 1):
             st.subheader(f"Voicing {idx}")
             st.text(print_voicing(v))
             st.audio(synthesize_voicing(v), sample_rate=44100)
+            fig = draw_diagram(v, idx)
+            st.pyplot(fig)
+            pdf_images.append(fig)
+
+# PDF 저장 버튼
+if pdf_images:
+    buf = BytesIO()
+    with PdfPages(buf) as pdf:
+        for fig in pdf_images:
+            pdf.savefig(fig)
+            plt.close(fig)
+    st.download_button("📥 Download Chord Diagrams as PDF", buf.getvalue(), file_name=f"{chord_root}{chord_type}_voicings.pdf")
