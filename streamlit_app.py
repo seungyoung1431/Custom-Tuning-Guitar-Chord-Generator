@@ -7,6 +7,7 @@ from scipy.signal import butter, lfilter
 # --- 기본 설정 ---
 note_sequence = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 note_to_index = {note: i for i, note in enumerate(note_sequence)}
+
 def note_from_fret(open_note, fret):
     start = note_to_index[open_note]
     return note_sequence[(start + fret) % 12]
@@ -25,9 +26,13 @@ tuning = []
 open_frequencies = []
 tuning_columns = st.columns(6)
 def_octaves = [2, 2, 3, 3, 3, 4]  # E2 A2 D3 G3 B3 E4
+default_notes = ['E', 'A', 'D', 'G', 'B', 'E']
 for i in range(6):
-    default_notes = ['E', 'A', 'D', 'G', 'B', 'E']
-    note = tuning_columns[i].selectbox(f"{6 - i} string", note_sequence, index=note_sequence.index(default_notes[i]))
+    note = tuning_columns[i].selectbox(
+        f"{6 - i} string", 
+        note_sequence, 
+        index=note_sequence.index(default_notes[i])
+    )
     tuning.append(note)
     open_frequencies.append(get_frequency(note, def_octaves[i]))
 
@@ -174,15 +179,15 @@ guide_tone_intervals = {
     "maj#11,13": [0, 11, 18, 21],
     "maj9,#11,13": [0, 11, 14, 18, 21],                
     "min": [0, 3, 7],
-    "min7": [0, 3, 10],
+    "min7": [0, 3, 7, 10],
     "min_maj7": [0, 3, 7, 11],
-    "min9": [0, 3, 10, 14],
-    "min11": [0, 3, 10, 17],
-    "min9,11": [0, 10, 14, 17],
-    "min13": [0, 3, 10, 21],
-    "min9,13": [0, 10, 14, 21],
-    "min11,13": [0, 10, 17, 21],
-    "min9,11,13 :": [0, 10, 14, 17, 21],
+    "min9": [0, 3, 7, 10, 14],
+    "min11": [0, 3, 7, 10, 17],
+    "min9,11": [0, 3, 7, 10, 14, 17],
+    "min13": [0, 3, 7, 10, 21],
+    "min9,13": [0, 3, 7, 10, 14, 21],
+    "min11,13": [0, 3, 7, 10, 17, 21],
+    "min9,11,13 :": [0, 3, 7, 10, 14, 17, 21],
     "7": [0, 4, 7, 10],
     "7,b9": [0, 4, 10, 13],
     "7,9": [0, 4, 10, 14],
@@ -198,7 +203,7 @@ guide_tone_intervals = {
     "7,#9,b13": [0, 10, 15, 20],
     "7,#11,b13": [0, 10, 18, 20],
     "7,9,#11,b13": [0, 10, 14, 18, 20],
-    "7,13": [0, 4, 10, 21],
+    "7,13": [0, 4, 7, 10, 21],
     "7,b9,13": [0, 10, 13, 21],
     "7,9,13": [0, 10, 14, 21],
     "7,#9,13": [0, 10, 15, 21],
@@ -207,12 +212,12 @@ guide_tone_intervals = {
     "7,b9,#11,13": [0, 10, 13, 18, 21],
     "7,#9,#11,13": [0, 10, 15, 18, 21],
     "sus4,7": [0, 5, 7, 10],
-    "sus4,7,b9": [0, 5, 10, 13],
-    "sus4,7,b9,13": [0, 5, 10, 13, 21],
-    "sus4,7,b9,b13": [0, 5, 10, 13, 20],
-    "sus4,7,9": [0, 5, 10, 14],
-    "sus4,7,9,13": [0, 5, 10, 14, 21],
-    "sus4,7,9,b13": [0, 5, 10, 14, 20],
+    "sus4,7,b9": [0, 5, 7, 10, 13],
+    "sus4,7,b9,13": [0, 5, 7, 10, 13, 21],
+    "sus4,7,b9,b13": [0, 5, 7, 10, 13, 20],
+    "sus4,7,9": [0, 5, 7, 10, 14],
+    "sus4,7,9,13": [0, 5, 7, 10, 14, 21],
+    "sus4,7,9,b13": [0, 5, 7, 10, 14, 20],
 }
 
 def get_full_chord_tones(chord_root, chord_type):
@@ -230,35 +235,52 @@ def generate_voicings(chord_root, chord_type, max_fret=14, allow_muted=True):
     required_tones = get_guide_tones(chord_root, chord_type)
     possible_options = []
     for idx, open_note in enumerate(tuning):
-        opts = [(fret, note_from_fret(open_note, fret)) for fret in range(max_fret+1)
-                if note_from_fret(open_note, fret) in full_chord]
+        opts = [
+            (fret, note_from_fret(open_note, fret)) 
+            for fret in range(max_fret+1)
+            if note_from_fret(open_note, fret) in full_chord
+        ]
         if allow_muted and idx in allowed_mute_indices:
             opts.append(("x", None))
         possible_options.append(opts)
     valid_voicings = []
     for comb in product(*possible_options):
         played = [c for c in comb if c[0] != "x"]
-        if len(played) < 4: continue
+        if len(played) < 4:
+            continue
         produced = {c[1] for c in played}
-        if not required_tones.issubset(produced): continue
+        # 필수(가이드) 톤 체크
+        if not required_tones.issubset(produced):
+            continue
+        # 프렛 스팬 제한 (편의상 3프렛 이내로 제한)
         frets = [c[0] for c in played if isinstance(c[0], int)]
         span = max(frets) - min(frets)
-        if span > 3: continue
+        if span > 3:
+            continue
+        # 가장 낮은 3줄(6,5,4번) 중 실제로 소리나는 줄(뮤트, x 제외) 중 최저음이 루트여야 한다
         lower_indices = [i for i in [0,1,2] if comb[i][0] != "x"]
-        if not lower_indices: continue
-        if comb[min(lower_indices)][1] != chord_root: continue
+        if not lower_indices:
+            continue
+        if comb[min(lower_indices)][1] != chord_root:
+            continue
+        # 보이싱 정렬 기준: (가장낮은줄 인덱스, 프렛 스팬, frets 합)
         frets_sum = sum(f for f, _ in played if isinstance(f, int))
         valid_voicings.append((comb, span, min(lower_indices), frets_sum))
     valid_voicings.sort(key=lambda x: (x[2], x[1], x[3]))
     return valid_voicings
 
-def print_voicing(voicing):
+# 변경: 간단히 1 x 6 형태로 한 줄에 프렛(또는 x)만 표시
+def print_voicing_simple(voicing):
+    # voicing은 6개의 (fret, note) 튜플 (위에서부터 6->5->4->3->2->1)
+    # 예: [(10, 'D'), ('x', None), (10, 'C'), ...]
+    # -> "10 x 10 10 10 x" 형태 출력
     result = []
-    for i, opt in enumerate(voicing):
-        string_label = f"{6-i} ({tuning[i]})"
-        fret, note = opt
-        result.append(f"{string_label}: {'x' if fret == 'x' else f'{fret} → {note}' }")
-    return "\n".join(result)
+    for fret, _ in voicing:
+        if fret == 'x':
+            result.append('x')
+        else:
+            result.append(str(fret))
+    return " ".join(result)
 
 def bandpass_filter(data, rate, low, high):
     nyq = 0.5 * rate
@@ -282,7 +304,8 @@ def synthesize_voicing(voicing, sample_rate=44100):
     samples = int(total * sample_rate)
     audio = np.zeros(samples)
     for i, (fret, _) in enumerate(voicing):
-        if fret == "x": continue
+        if fret == "x":
+            continue
         freq = open_frequencies[i] * (2 ** (fret / 12))
         offset = int(delay * i * sample_rate)
         t = np.linspace(0, duration, int(sample_rate * duration), False)
@@ -303,10 +326,14 @@ if st.button("Generate Voicings"):
     elif mode == "Show best voicing only":
         v, *_ = voicings[0]
         st.subheader("Best Voicing")
-        st.text(print_voicing(v))
+        # 간단히 1 x 6 형태로 출력
+        st.text(print_voicing_simple(v))
+        # 오디오
         st.audio(synthesize_voicing(v), sample_rate=44100)
     else:
         for idx, (v, *_rest) in enumerate(voicings, 1):
             st.subheader(f"Voicing {idx}")
-            st.text(print_voicing(v))
+            # 간단히 1 x 6 형태로 출력
+            st.text(print_voicing_simple(v))
+            # 오디오
             st.audio(synthesize_voicing(v), sample_rate=44100)
