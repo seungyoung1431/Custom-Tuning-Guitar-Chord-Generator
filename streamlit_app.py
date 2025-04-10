@@ -7,13 +7,31 @@ from scipy.signal import butter, lfilter
 # --- 기본 설정 ---
 note_sequence = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 note_to_index = {note: i for i, note in enumerate(note_sequence)}
-open_frequencies = [73.42, 110.0, 130.81, 164.81, 207.65, 329.63]
-tuning = ['D', 'A', 'C', 'E', 'G#', 'E']
-allowed_mute_indices = {0, 1, 5}  # 6,5,1번 줄만 음소거 가능
+def note_from_fret(open_note, fret):
+    start = note_to_index[open_note]
+    return note_sequence[(start + fret) % 12]
+
+def get_frequency(note, octave=4):
+    base_freq = 440.0  # A4
+    semitone_distance = note_to_index[note] - note_to_index['A'] + (octave - 4) * 12
+    return base_freq * (2 ** (semitone_distance / 12))
 
 # --- Streamlit UI ---
-st.title("Custom Tuning Guitar Chord Generator")
-st.caption("Create chord voicings for any tuning")
+st.title("🎸Custom Tuning Guitar Chord Generator")
+st.caption("Create Chord Voicings for Any Tuning")
+
+st.subheader("1. Set Your Tuning (6th to 1st string)")
+tuning = []
+open_frequencies = []
+tuning_columns = st.columns(6)
+def_octaves = [2, 2, 3, 3, 3, 4]  # E2 A2 D3 G3 B3 E4
+for i in range(6):
+    default_notes = ['E', 'A', 'D', 'G', 'B', 'E']
+    note = tuning_columns[i].selectbox(f"{6 - i} string", note_sequence, index=note_sequence.index(default_notes[i]))
+    tuning.append(note)
+    open_frequencies.append(get_frequency(note, def_octaves[i]))
+
+allowed_mute_indices = {0, 1, 5}  # 6,5,1번 줄만 음소거 가능
 
 chord_root = st.selectbox("Chord Root", note_sequence)
 chord_type = st.selectbox("Chord Type", list({
@@ -194,11 +212,8 @@ guide_tone_intervals = {
     "sus4,7,b9,b13": [0, 5, 10, 13, 20],
     "sus4,7,9": [0, 5, 10, 14],
     "sus4,7,9,13": [0, 5, 10, 14, 21],
-    "sus4,7,9,b13": [0, 5, 10, 14, 20]
+    "sus4,7,9,b13": [0, 5, 10, 14, 20],
 }
-def note_from_fret(open_note, fret):
-    start = note_to_index[open_note]
-    return note_sequence[(start + fret) % 12]
 
 def get_full_chord_tones(chord_root, chord_type):
     intervals = chord_formulas[chord_type]
