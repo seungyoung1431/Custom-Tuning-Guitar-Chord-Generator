@@ -19,9 +19,6 @@ def get_frequency(note, octave=4):
 
 # --- Streamlit UI ---
 st.title("Custom Tuning Guitar Chord Generator")
-st.caption("Create Chord Voicings for Any Tuning")
-
-st.subheader("1. Set Your Tuning (6th to 1st string)")
 tuning = []
 open_frequencies = []
 tuning_columns = st.columns(6)
