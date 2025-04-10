@@ -1,4 +1,3 @@
-# streamlit_app.py
 import streamlit as st
 import numpy as np
 from itertools import product
@@ -20,7 +19,7 @@ def get_frequency(note, octave=4):
     return base_freq * (2 ** (semitone_distance / 12))
 
 # --- Streamlit UI ---
-st.title("🎸Custom Tuning Guitar Chord Generator")
+st.title("🎸 Custom Tuning Guitar Chord Generator")
 st.caption("Create chord voicings for any tuning")
 
 st.subheader("1. Set Your Tuning (6th to 1st string)")
@@ -45,7 +44,7 @@ for i in range(6):
 allowed_mute_indices = {0, 1, 5}  # 6,5,1번 줄만 음소거 가능
 
 chord_root = st.selectbox("Chord Root", note_sequence)
-chord_type = st.selectbox("Chord Type", list({ 
+chord_type = st.selectbox("Chord Type", list({
     "maj": [0, 4, 7],
     "add2": [0, 2, 4, 7],
     "add#4" : [0, 4, 6, 7],
@@ -102,11 +101,14 @@ chord_type = st.selectbox("Chord Type", list({
     "sus4,7,b9,b13": [0, 5, 7, 10, 13, 20],
     "sus4,7,9": [0, 5, 7, 10, 14],
     "sus4,7,9,13": [0, 5, 7, 10, 14, 21],
-    "sus4,7,9,b13": [0, 5, 7, 10, 14, 20]
+    "sus4,7,9,b13": [0, 5, 7, 10, 14, 20],
 }.keys()))
 mode = st.radio("Display Mode", ["Show all voicings", "Show best voicing only"])
 
-# --- 코드 폼 ---
+# --- Generate Voicings Always Available ---
+show_voicings = st.button("🎵 Generate Voicings")
+
+# --- 코드 폼 ---)
 chord_formulas = { 
     "maj": [0, 4, 7],
     "add2": [0, 2, 4, 7],
