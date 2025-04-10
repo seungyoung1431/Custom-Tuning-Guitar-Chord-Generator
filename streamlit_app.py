@@ -28,7 +28,7 @@ def bandpass_filter(data, rate, low, high):
 
 def envelope(duration, rate, attack_ms, release_ms):
     samples = int(duration * rate)
-    a, r = int(attack_ms/1000 * rate), int(release_ms/1000 * rate)
+    a, r = int(attack_ms / 1000 * rate), int(release_ms / 1000 * rate)
     s = samples - a - r
     if s < 0: s = 0
     env = np.concatenate([
@@ -39,6 +39,30 @@ def envelope(duration, rate, attack_ms, release_ms):
     if len(env) < samples:
         env = np.pad(env, (0, samples - len(env)), mode='constant')
     return env
+
+def synthesize_voicing(voicing, sr=44100, open_frequencies=None):
+    dur = 1.0
+    dly = 0.12
+    total = dur + dly*5
+    smp = int(total*sr)
+    audio = np.zeros(smp)
+    for i,(fr,_) in enumerate(voicing):
+        if fr=="x": 
+            continue
+        freq = open_frequencies[i]*(2**(fr/12))
+        off = int(dly*i*sr)
+        t = np.linspace(0,dur,int(sr*dur),False)
+        env = envelope(dur,sr,60,500)
+        wave = 0.2*np.sin(2*np.pi*freq*t)*env
+        endi = off+len(wave)
+        if endi> smp:
+            wave=wave[:smp-off]
+        audio[off:off+len(wave)] += wave
+    audio = bandpass_filter(audio,sr,80,5000)
+    mx = np.max(np.abs(audio))
+    if mx>0:
+        audio/=mx
+    return audio
 
 ######################
 #  Streamlit UI 부분  #
@@ -106,8 +130,6 @@ if st.button("🎵 Generate Voicings"):
         rdx = note_to_index[croot]
         return { note_sequence[(rdx + iv) % 12] for iv in intervals }
 
-    from itertools import product
-
     def generate_voicings(croot, ctype, max_fret=14, allow_muted=True):
         full_chord = get_full_chord_tones(croot, ctype)
         required = get_guide_tones(croot, ctype)
@@ -159,78 +181,58 @@ if st.button("🎵 Generate Voicings"):
                 lines.append(f"{label}: {fr}→{nt}")
         return "\n".join(lines)
 
-    def synthesize_voicing(voicing, sample_rate=44100):
-        dur=1.0
-        dly=0.12
-        total=dur+dly*5
-        smp=int(total*sample_rate)
-        audio = np.zeros(smp)
-        for i,(fr,_) in enumerate(voicing):
-            if fr=="x": continue
-            freq = open_frequencies[i]*(2**(fr/12))
-            off = int(dly*i*sample_rate)
-            t = np.linspace(0,dur,int(sample_rate*dur),False)
-            env = envelope(dur,sample_rate,60,500)
-            wave = 0.2*np.sin(2*np.pi*freq*t)*env
-            endi = off+len(wave)
-            if endi> smp:
-                wave=wave[:smp-off]
-            audio[off:off+len(wave)] += wave
-        audio = bandpass_filter(audio,sample_rate,80,5000)
-        mx=np.max(np.abs(audio))
-        if mx>0: audio/=mx
-        return audio
-
     ###############################
-    # 다이어그램(4칸x5칸) + 2:1비율
-    # 음표는 가로선 중간 (y+0.5)
-    # X도 y+0.5
-    # 코드 이름 표시 제거
+    # 다이어그램(4칸x5칸), 2:1비율
+    # 음표 크기 2배, X도 2배
+    # 음표와 X는 가로선 자체에 중앙 배치
+    # 전체 크기는 1/3
+    # 코드명 표시 제거
     ###############################
     def draw_4x5_diagram(voicing):
-        # frets 범위: 4칸 -> x=0..4, 수직선5개
-        # strings=6개 -> y=0..5, 수평선6개
-        # figsize(가로=8, 세로=4) => 2:1비율
-        fig, ax = plt.subplots(figsize=(8,4))
+        # 기존 대비 1/3: ex. (8,4)->(8/3,4/3)->(2.67,1.33)
+        fig, ax = plt.subplots(figsize=(2.67,1.33))
         ax.set_facecolor("white")
+        # 수직선 x=0..4, 수평선 y=0..5
         ax.set_xlim(-0.1,4.1)
         ax.set_ylim(-0.1,5.1)
-        ax.invert_yaxis()
+        # 뒤집지 않음(상단=6번줄), 옆으로 길게
         ax.axis("off")
 
-        # 수직선(0..4) → 5줄
+        # 세로줄
         for x in range(5):
             lw=3 if x==0 else 1
             ax.plot([x,x],[0,5],color='black',lw=lw)
-        # 수평선(0..5) → 6줄
+        # 가로줄
         for y in range(6):
             ax.plot([0,4],[y,y],color='black',lw=1)
 
-        # 가장 낮은 프렛 = minF
         frets_only = [f for f,n in voicing if f!="x"]
-        if frets_only:
-            minF = min(frets_only)
-        else:
-            minF = 0
+        minF = min(frets_only) if frets_only else 0
 
-        # 음표/ X
+        # 음표(●)와 X 표시
+        # "가로선에 걸친 중앙" => y를 정수로 해서 점을 띄우지 않음
+        # i=0 -> y=0 (6번줄), i=5->y=5(1번줄)
+        # x_col = (f-minF)+0.5
+        # markersize= "2배" => ex 15->30
+        # X도 font 크기 2배
         for i,(f,n) in enumerate(voicing):
-            # i=0 => 6번줄 => y=0
-            y_row = i
+            y = i  # 정수
             if f=="x":
-                ax.text(-0.3,y_row+0.5,"X",fontsize=12,
+                ax.text(-0.3,y,"X",fontsize=20,
                     ha='center',va='center',color='red',weight='bold')
             else:
                 if f> minF+3:
-                    # 4칸 범위 밖 => 표시안함
                     continue
-                cx = (f - minF)+0.5
-                cy = y_row+0.5
-                ax.plot(cx,cy,"o",markersize=15,color='black')
-                ax.text(cx,cy,n,fontsize=9,color='white',
+                cx = (f-minF)+0.5
+                # 점: y정수 + 0 => y자리에
+                ax.plot(cx,y,"o",markersize=30,color='black')
+                ax.text(cx,y,n,fontsize=12,color='white',
                     ha='center',va='center',weight='bold')
 
         st.pyplot(fig)
+
+    # --- 보이싱 생성 & 출력 ---
+    from itertools import product
 
     voics = generate_voicings(chord_root,chord_type)
     st.write(f"Number of Voicings: {len(voics)}")
@@ -238,14 +240,16 @@ if st.button("🎵 Generate Voicings"):
     if not voics:
         st.warning("No matching voicings were found.")
     elif mode=="Show best voicing only":
-        best, *_ = voics[0]
+        best,*_ = voics[0]
         st.subheader("Best Voicing")
         st.text(print_voicing(best))
         draw_4x5_diagram(best)
-        st.audio(synthesize_voicing(best), sample_rate=44100)
+        audio = synthesize_voicing(best,open_frequencies=open_frequencies)
+        st.audio(audio, sample_rate=44100)
     else:
         for idx,(v,*_) in enumerate(voics,1):
             st.subheader(f"Voicing {idx}")
             st.text(print_voicing(v))
             draw_4x5_diagram(v)
-            st.audio(synthesize_voicing(v), sample_rate=44100)
+            audio = synthesize_voicing(v,open_frequencies=open_frequencies)
+            st.audio(audio, sample_rate=44100)
