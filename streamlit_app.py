@@ -1,5 +1,3 @@
-다시 시작해보자  밑에 내가 적어놓은 코드로 원상 복구해
-
 # streamlit_app.py
 import streamlit as st
 import numpy as np
